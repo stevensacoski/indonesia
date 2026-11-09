@@ -781,6 +781,29 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .acard .amain .act{color:#1f5a4a}
   .acard.crit{border-left:3px solid var(--exigente)}
   .acard.warn{border-left:3px solid var(--moderado)}
+  .rsv{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+  .rsv:empty{display:none}
+  .rsv.done{background:rgba(47,158,104,.14);color:#1f7a4e;border-color:rgba(47,158,104,.3)}
+  .segbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .segbtn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:13px;font-weight:700;padding:8px 14px;border-radius:9px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+  .segbtn.primary{background:#1f7a4e;color:#fff;border-color:#1f7a4e}
+  .segbtn:hover{border-color:var(--accent)}
+  .segmeta{font-size:12px;color:var(--muted)}
+  .segsummary{display:flex;gap:22px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:13px 18px;margin-bottom:14px}
+  .segsummary .sv{font-size:20px;font-weight:800;color:var(--ink)}
+  .segsummary .sl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .seggroup{margin:14px 0}
+  .seggroup h4{font-size:13px;margin:0 0 4px;color:var(--ink);border-bottom:1px solid var(--line);padding-bottom:5px}
+  .segitem{display:grid;grid-template-columns:auto 1fr auto;gap:3px 12px;align-items:start;padding:9px 4px;border-bottom:1px solid var(--line)}
+  .segitem:last-child{border-bottom:none}
+  .segitem .st{font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .st.ok{background:rgba(47,158,104,.14);color:#1f7a4e}
+  .st.mid{background:rgba(201,138,30,.16);color:#9a6a12}
+  .st.none{background:#edeae2;color:#8a8f98}
+  .segitem .si{min-width:0}
+  .segitem .si .sname{font-size:14px;color:var(--ink);font-weight:600}
+  .segitem .si .smeta{font-size:12px;color:var(--muted);margin-top:2px}
+  .segitem .scost{font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap}
   .note{background:#fbf9f3;border:1px solid var(--line);border-left:3px solid var(--accent2);border-radius:10px;padding:14px 16px;margin:16px 0;font-size:13.5px;color:#434a56}
   .note b{color:var(--ink)}
   footer{color:var(--faint);font-size:12px;margin-top:40px;text-align:center}
@@ -820,6 +843,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <button class="tab active" data-tab="itinerario">📅 Itinerario <span class="cnt">18</span></button>
     <button class="tab" data-tab="presupuesto">💵 Presupuesto</button>
     <button class="tab" data-tab="alertas">⚠️ Alertas / a resolver</button>
+    <button class="tab" data-tab="seguimiento">📋 Seguimiento</button>
   </div>
 
   <div class="panel active" id="itinerario">
@@ -842,7 +866,18 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div id="alerts"></div>
   </div>
 
-  <footer>Armado desde el plan maestro del proyecto · ritmo e intensidad son mi lectura, ajustable a cómo se sientan en el momento.</footer>
+  <div class="panel" id="seguimiento">
+    <p class="panel-lead">Se carga en vivo desde tu <b>Google Sheet</b>. Editala desde el celu o la web (estado, costo final, horarios, códigos) y la página lo refleja al recargar o con 🔄 Actualizar. Estados que cuentan como listos: <b>Confirmado</b> o <b>Pagado</b>.</p>
+    <div class="segbar">
+      <a class="segbtn primary" id="segopen" href="#" target="_blank" rel="noopener">📋 Abrir / editar planilla</a>
+      <button class="segbtn" id="segrefresh">🔄 Actualizar</button>
+      <span class="segmeta" id="segstatus">Cargando…</span>
+    </div>
+    <div id="segsummary"></div>
+    <div id="segbody"></div>
+  </div>
+
+  <footer>Armado desde el plan maestro del proyecto · ritmo e intensidad son mi lectura, ajustable a cómo se sientan en el momento. Seguimiento en vivo desde Google Sheets.</footer>
 </div>
 
 <script>/* @preserve
@@ -1001,7 +1036,7 @@ days.forEach(d=>{
   let rd=d.read, rx=''; if(rd.startsWith('rx|')){rx=' rx';rd=rd.slice(3);}
   el.innerHTML=`<div class="dhead"><div class="dnum">${d.n}<small>DÍA</small></div>
     <div class="dtitle"><div class="dt-date">${d.date} · ${d.noche}</div><h3>${d.title}</h3>
-    <div class="badges">${badges}</div></div></div>
+    <div class="badges">${badges}<span class="rsv" id="rsv-${d.n}"></span></div></div></div>
     <div class="dbody"><div class="plan"><p>${d.plan}</p>${hl}</div>
     <div class="side"><h4>Tiempos del día</h4><ul class="tl">${tl}</ul>
     <div class="read${rx}">${rd}</div></div></div>`;
@@ -1048,6 +1083,67 @@ document.querySelectorAll('.tab').forEach(btn=>{
     if(p) p.classList.add('active');
   });
 });
+
+// ---- Seguimiento en vivo desde Google Sheets ----
+const SHEET_ID='1WIHHyl0kIe8T7vGdmoC3DFiswrF_9-JNB05xPHZaTmE';
+const SHEET_CSV='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv';
+const SHEET_VIEW='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/edit';
+const segStatus=document.getElementById('segstatus');
+function esc(s){return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+function estadoClass(e){e=(e||'').toLowerCase();
+  if(e.includes('pag')||e.includes('confirm')||e.includes('list')) return 'ok';
+  if(e.includes('gesti')||e.includes('sena')||e.includes('seña')||e.includes('reserv')||e.includes('curso')||e.includes('proceso')) return 'mid';
+  return 'none';}
+function parseCSV(text){const rows=[];let i=0,field='',row=[],q=false;
+  while(i<text.length){const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){field+='"';i+=2;continue;} q=false;i++;continue;} field+=c;i++;continue;}
+    if(c==='"'){q=true;i++;continue;}
+    if(c===','){row.push(field);field='';i++;continue;}
+    if(c==='\r'){i++;continue;}
+    if(c==='\n'){row.push(field);rows.push(row);row=[];field='';i++;continue;}
+    field+=c;i++;}
+  if(field.length||row.length){row.push(field);rows.push(row);}
+  return rows;}
+function renderTracker(rows){
+  if(!rows||!rows.length)return;
+  const data=rows.slice(1).filter(r=>(r[2]||'').trim()).map(r=>({
+    dia:(r[0]||'').trim(),fecha:(r[1]||'').trim(),item:(r[2]||'').trim(),estado:(r[3]||'').trim(),
+    costo:(r[4]||'').trim(),horario:(r[5]||'').trim(),conf:(r[6]||'').trim(),notas:(r[7]||'').trim()}));
+  let done=0,gasto=0;
+  data.forEach(it=>{if(estadoClass(it.estado)==='ok')done++;
+    const n=parseFloat((it.costo||'').replace(/[^0-9.]/g,''));if(!isNaN(n))gasto+=n;});
+  document.getElementById('segsummary').innerHTML=
+    `<div class="segsummary"><div><div class="sv">${done}/${data.length}</div><div class="sl">Confirmado o pagado</div></div>`+
+    `<div><div class="sv">US$ ${gasto.toLocaleString('es-AR')}</div><div class="sl">Costo cargado</div></div></div>`;
+  const groups={};data.forEach(it=>{(groups[it.dia]=groups[it.dia]||[]).push(it);});
+  const order=Object.keys(groups).sort((a,b)=>(a==='0'?-1:b==='0'?1:(+a)-(+b)));
+  let html='';
+  order.forEach(dia=>{const g=groups[dia];
+    const title=dia==='0'?'Trámites y generales':('Día '+dia+(g[0].fecha?' · '+esc(g[0].fecha):''));
+    html+=`<div class="seggroup"><h4>${title}</h4>`;
+    g.forEach(it=>{const cl=estadoClass(it.estado);
+      const meta=[it.horario?('🕑 '+esc(it.horario)):'',it.conf?('#'+esc(it.conf)):'',esc(it.notas)].filter(Boolean).join(' · ');
+      html+=`<div class="segitem"><span class="st ${cl}">${esc(it.estado)||'—'}</span>`+
+        `<div class="si"><div class="sname">${esc(it.item)}</div>${meta?`<div class="smeta">${meta}</div>`:''}</div>`+
+        `<span class="scost">${it.costo?('US$ '+esc(it.costo.replace(/[^0-9.,]/g,''))):''}</span></div>`;});
+    html+='</div>';});
+  document.getElementById('segbody').innerHTML=html;
+  document.querySelectorAll('.rsv').forEach(s=>{s.textContent='';s.classList.remove('done');});
+  Object.keys(groups).forEach(dia=>{if(dia==='0')return;
+    const el=document.getElementById('rsv-'+dia);if(!el)return;
+    const g=groups[dia],d=g.filter(it=>estadoClass(it.estado)==='ok').length;
+    el.textContent=`reservas ${d}/${g.length}`;
+    if(d===g.length&&g.length>0)el.classList.add('done');});
+}
+function loadTracker(){
+  if(segStatus)segStatus.textContent='Cargando…';
+  fetch(SHEET_CSV,{cache:'no-store'}).then(r=>{if(!r.ok)throw 0;return r.text();})
+    .then(t=>{renderTracker(parseCSV(t));if(segStatus)segStatus.textContent='Actualizado '+new Date().toLocaleString('es-AR');})
+    .catch(()=>{if(segStatus)segStatus.textContent='No se pudo leer la planilla ahora. Abrila con el botón; reintentá con Actualizar.';});
+}
+const segOpen=document.getElementById('segopen');if(segOpen)segOpen.href=SHEET_VIEW;
+const segRef=document.getElementById('segrefresh');if(segRef)segRef.onclick=loadTracker;
+loadTracker();
 
 // ---- Mapa (al final y protegido: si falla, el resto ya funciona) ----
 try{
