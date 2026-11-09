@@ -813,6 +813,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .rview .rv-meta{font-size:12px;color:var(--muted);margin-top:2px}
   .rview .rv-cost{font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap}
   .seg-sub{font-size:12.5px;color:var(--muted);margin:-2px 0 9px}
+  .cat{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;padding:2px 9px;border-radius:999px;border:1px solid var(--cc);color:var(--cc);background:#fff;white-space:nowrap}
+  .cat::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--cc)}
+  .catsum{display:flex;flex-wrap:wrap;gap:8px;margin:-2px 0 14px}
+  .rv-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .rez-cat,.add-cat{font-size:12.5px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);flex:1 1 150px;min-width:130px}
+  .add-form .add-cat{flex:1 1 150px}
   .rez-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px}
   .rez-note{font-size:12px;color:var(--faint);margin:4px 0}
   .rez{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:7px 0}
@@ -1130,6 +1136,10 @@ let API=API_HARDCODED||(function(){try{return localStorage.getItem('viaje_api')|
 let TRACK=[];
 const ESTADOS=['A reservar','En gestión','Confirmado','Pagado'];
 function esc(s){return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+const CATS=['Vuelo internacional','Traslados internos','Excursiones','Alojamiento','Trámites'];
+const CATCOLOR={'Vuelo internacional':'#7a5cf0','Traslados internos':'#2b6f8c','Excursiones':'#2f9e68','Alojamiento':'#c98a1e','Trámites':'#6c7280'};
+function optsCat(sel){return ['',...CATS].map(c=>`<option value="${esc(c)}" ${c===sel?'selected':''}>${c?esc(c):'— categoría —'}</option>`).join('');}
+function catTag(c){if(!c)return '';const col=CATCOLOR[c]||'#6c7280';return `<span class="cat" style="--cc:${col}">${esc(c)}</span>`;}
 function estadoClass(e){e=(e||'').toLowerCase();
   if(e.includes('pag')||e.includes('confirm')||e.includes('list')) return 'ok';
   if(e.includes('gesti')||e.includes('sena')||e.includes('seña')||e.includes('reserv')||e.includes('curso')||e.includes('proceso')) return 'mid';
@@ -1158,6 +1168,7 @@ function rowEditor(it){const cl=estadoClass(it.estado);
       <span class="rez-item">${esc(it.item)}</span>
       <button class="rez-del" title="Borrar actividad">✕</button></div>
     <div class="rez-fields">
+      <select class="rez-cat">${optsCat(it.categoria)}</select>
       <input class="rez-costo" placeholder="Costo US$" value="${esc(it.costo)}">
       <input class="rez-horario" placeholder="Horario" value="${esc(it.horario)}">
       <input class="rez-conf" placeholder="Confirmación / código" value="${esc(it.conf)}">
@@ -1166,6 +1177,7 @@ function rowEditor(it){const cl=estadoClass(it.estado);
 function addForm(){return `<div class="addwrap"><button class="add-toggle">+ Agregar actividad</button>
     <div class="add-form" hidden>
       <input class="add-item" placeholder="Actividad / ítem">
+      <select class="add-cat">${optsCat('')}</select>
       <input class="add-costo" placeholder="Costo US$">
       <input class="add-horario" placeholder="Horario">
       <input class="add-notas" placeholder="Notas">
@@ -1182,8 +1194,9 @@ function saveApi(){const i=document.getElementById('apiurl');if(!i)return;const 
   API=v;try{localStorage.setItem('viaje_api',v);}catch(e){}loadTracker();}
 function rowView(it){const cl=estadoClass(it.estado);
   const meta=[it.horario?('🕑 '+esc(it.horario)):'',it.conf?('#'+esc(it.conf)):'',esc(it.notas)].filter(Boolean).join(' · ');
+  const low=(it.categoria||meta)?`<div class="rv-meta">${catTag(it.categoria)}${meta?('<span>'+meta+'</span>'):''}</div>`:'';
   return `<div class="rview"><span class="st ${cl}">${esc(it.estado)||'—'}</span>`+
-    `<div class="rv-main"><div class="rv-item">${esc(it.item)}</div>${meta?`<div class="rv-meta">${meta}</div>`:''}</div>`+
+    `<div class="rv-main"><div class="rv-item">${esc(it.item)}</div>${low}</div>`+
     `<span class="rv-cost">${it.costo?('US$ '+esc(it.costo.replace(/[^0-9.,]/g,''))):''}</span></div>`;}
 function renderAll(){
   // Itinerario: solo lectura (limpio). Muestra las reservas/actividades del día con su estado, si hay.
@@ -1212,10 +1225,14 @@ function segGroup(dia,heading,fecha,subtitle){
 function renderSeguimiento(){
   const host=document.getElementById('segbody'),sum=document.getElementById('segsummary');if(!host)return;
   if(!API){host.innerHTML=setupHTML();if(sum)sum.innerHTML='';return;}
-  let done=0,gasto=0;
-  TRACK.forEach(it=>{if(estadoClass(it.estado)==='ok')done++;const n=parseFloat((it.costo||'').replace(/[^0-9.]/g,''));if(!isNaN(n))gasto+=n;});
+  let done=0,gasto=0;const byCat={};
+  TRACK.forEach(it=>{if(estadoClass(it.estado)==='ok')done++;
+    const n=parseFloat((it.costo||'').replace(/[^0-9.]/g,''));
+    if(!isNaN(n)){gasto+=n;const c=it.categoria||'Sin categoría';byCat[c]=(byCat[c]||0)+n;}});
+  const catLine=CATS.filter(c=>byCat[c]).map(c=>`<span class="cat" style="--cc:${CATCOLOR[c]}">${c}: US$ ${byCat[c].toLocaleString('es-AR')}</span>`).join('');
   if(sum)sum.innerHTML=`<div class="segsummary"><div><div class="sv">${done}/${TRACK.length}</div><div class="sl">Confirmado o pagado</div></div>`+
-    `<div><div class="sv">US$ ${gasto.toLocaleString('es-AR')}</div><div class="sl">Costo cargado</div></div></div>`;
+    `<div><div class="sv">US$ ${gasto.toLocaleString('es-AR')}</div><div class="sl">Costo cargado</div></div></div>`+
+    (catLine?`<div class="catsum">${catLine}</div>`:'');
   let h=segGroup('0','Trámites y generales','','Visas, seguro, aéreo, tasas…');
   days.forEach(d=>{h+=segGroup(String(d.n),'Día '+d.n+' · '+d.date,d.date,d.title.replace(/<[^>]+>/g,''));});
   host.innerHTML=h;}
@@ -1229,12 +1246,14 @@ document.addEventListener('click',e=>{const t=e.target;
 document.addEventListener('change',e=>{if(e.target.classList.contains('rez-estado'))saveRez(e.target.closest('.rez'));});
 function saveRez(rez){if(!rez)return;
   pushUpdate(+rez.dataset.row,{estado:rez.querySelector('.rez-estado').value,
+    categoria:rez.querySelector('.rez-cat').value,
     costo:rez.querySelector('.rez-costo').value,horario:rez.querySelector('.rez-horario').value,
     conf:rez.querySelector('.rez-conf').value,notas:rez.querySelector('.rez-notas').value,
     item:rez.querySelector('.rez-item').textContent});}
 function addFromForm(wrap,form){if(!wrap||!form)return;
   const ii=form.querySelector('.add-item'),item=ii.value.trim();if(!item){ii.focus();return;}
   pushAdd({dia:wrap.dataset.dia,fecha:wrap.dataset.fecha,item:item,
+    categoria:form.querySelector('.add-cat').value,
     costo:form.querySelector('.add-costo').value,horario:form.querySelector('.add-horario').value,
     notas:form.querySelector('.add-notas').value,estado:'A reservar'});}
 const segOpen=document.getElementById('segopen');if(segOpen)segOpen.href=SHEET_VIEW;
