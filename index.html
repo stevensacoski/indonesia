@@ -804,6 +804,35 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .segitem .si .sname{font-size:14px;color:var(--ink);font-weight:600}
   .segitem .si .smeta{font-size:12px;color:var(--muted);margin-top:2px}
   .segitem .scost{font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap}
+  .resvwrap{border-top:1px solid var(--line);margin:0 18px;padding:12px 0 16px}
+  .rez-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px}
+  .rez-note{font-size:12px;color:var(--faint);margin:4px 0}
+  .rez{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:7px 0}
+  .rez-top{display:flex;align-items:center;gap:10px}
+  .rez-item{flex:1 1 auto;font-size:14px;font-weight:600;color:var(--ink);min-width:0}
+  .rez-estado{font-size:11px;font-weight:700;border-radius:999px;border:1px solid var(--line);padding:3px 8px;cursor:pointer;-webkit-appearance:none;appearance:none}
+  .rez-estado.ok{background:rgba(47,158,104,.14);color:#1f7a4e}
+  .rez-estado.mid{background:rgba(201,138,30,.16);color:#9a6a12}
+  .rez-estado.none{background:#edeae2;color:#8a8f98}
+  .rez-del{border:none;background:none;color:var(--faint);font-size:14px;cursor:pointer;padding:2px 7px;border-radius:6px;flex:0 0 auto}
+  .rez-del:hover{background:rgba(210,69,47,.12);color:#b23420}
+  .rez-fields{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;align-items:center}
+  .rez-fields input{flex:1 1 120px;min-width:90px;font-size:13px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  .rez-fields .rez-notas{flex:1 1 100%}
+  .rez-save,.add-save,#segsave-api{-webkit-appearance:none;appearance:none;border:1px solid var(--accent);background:var(--accent);color:#fff;font-size:12.5px;font-weight:700;padding:7px 15px;border-radius:8px;cursor:pointer;flex:0 0 auto;white-space:nowrap}
+  .rez-save:hover,.add-save:hover,#segsave-api:hover{filter:brightness(1.07)}
+  .addwrap{margin-top:6px}
+  .add-toggle{-webkit-appearance:none;appearance:none;border:1px dashed var(--line);background:var(--panel);color:var(--accent);font-size:12.5px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer}
+  .add-form{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;background:var(--panel2);border:1px dashed var(--line);border-radius:10px;padding:10px;align-items:center}
+  .add-form input{flex:1 1 120px;min-width:90px;font-size:13px;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+  .add-form .add-item{flex:1 1 100%}
+  .setup{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .setup h4{margin:0 0 8px;font-size:15px}
+  .setup ol{margin:0 0 12px;padding-left:20px;font-size:13.5px;color:#434a56}
+  .setup ol li{margin:5px 0}
+  .setup-in{display:flex;gap:8px;flex-wrap:wrap}
+  .setup-in input{flex:1 1 300px;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px}
+  .setup code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
   .note{background:#fbf9f3;border:1px solid var(--line);border-left:3px solid var(--accent2);border-radius:10px;padding:14px 16px;margin:16px 0;font-size:13.5px;color:#434a56}
   .note b{color:var(--ink)}
   footer{color:var(--faint);font-size:12px;margin-top:40px;text-align:center}
@@ -1039,7 +1068,7 @@ days.forEach(d=>{
     <div class="badges">${badges}<span class="rsv" id="rsv-${d.n}"></span></div></div></div>
     <div class="dbody"><div class="plan"><p>${d.plan}</p>${hl}</div>
     <div class="side"><h4>Tiempos del día</h4><ul class="tl">${tl}</ul>
-    <div class="read${rx}">${rd}</div></div></div>`;
+    <div class="read${rx}">${rd}</div></div></div><div class="resvwrap" id="resv-${d.n}"></div>`;
   cont.appendChild(el);
 });
 
@@ -1084,65 +1113,110 @@ document.querySelectorAll('.tab').forEach(btn=>{
   });
 });
 
-// ---- Seguimiento en vivo desde Google Sheets ----
+// ---- Seguimiento bidireccional (Google Sheets vía Apps Script) ----
 const SHEET_ID='1WIHHyl0kIe8T7vGdmoC3DFiswrF_9-JNB05xPHZaTmE';
-const SHEET_CSV='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv';
 const SHEET_VIEW='https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/edit';
-const segStatus=document.getElementById('segstatus');
+// Pegá acá la URL /exec del Apps Script para dejarla fija en el repo (o usá "Conectar" en la pestaña Seguimiento):
+const API_HARDCODED='';
+let API=API_HARDCODED||(function(){try{return localStorage.getItem('viaje_api')||'';}catch(e){return '';}})();
+let TRACK=[];
+const ESTADOS=['A reservar','En gestión','Confirmado','Pagado'];
 function esc(s){return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
 function estadoClass(e){e=(e||'').toLowerCase();
   if(e.includes('pag')||e.includes('confirm')||e.includes('list')) return 'ok';
   if(e.includes('gesti')||e.includes('sena')||e.includes('seña')||e.includes('reserv')||e.includes('curso')||e.includes('proceso')) return 'mid';
   return 'none';}
-function parseCSV(text){const rows=[];let i=0,field='',row=[],q=false;
-  while(i<text.length){const c=text[i];
-    if(q){ if(c==='"'){ if(text[i+1]==='"'){field+='"';i+=2;continue;} q=false;i++;continue;} field+=c;i++;continue;}
-    if(c==='"'){q=true;i++;continue;}
-    if(c===','){row.push(field);field='';i++;continue;}
-    if(c==='\r'){i++;continue;}
-    if(c==='\n'){row.push(field);rows.push(row);row=[];field='';i++;continue;}
-    field+=c;i++;}
-  if(field.length||row.length){row.push(field);rows.push(row);}
-  return rows;}
-function renderTracker(rows){
-  if(!rows||!rows.length)return;
-  const data=rows.slice(1).filter(r=>(r[2]||'').trim()).map(r=>({
-    dia:(r[0]||'').trim(),fecha:(r[1]||'').trim(),item:(r[2]||'').trim(),estado:(r[3]||'').trim(),
-    costo:(r[4]||'').trim(),horario:(r[5]||'').trim(),conf:(r[6]||'').trim(),notas:(r[7]||'').trim()}));
-  let done=0,gasto=0;
-  data.forEach(it=>{if(estadoClass(it.estado)==='ok')done++;
-    const n=parseFloat((it.costo||'').replace(/[^0-9.]/g,''));if(!isNaN(n))gasto+=n;});
-  document.getElementById('segsummary').innerHTML=
-    `<div class="segsummary"><div><div class="sv">${done}/${data.length}</div><div class="sl">Confirmado o pagado</div></div>`+
-    `<div><div class="sv">US$ ${gasto.toLocaleString('es-AR')}</div><div class="sl">Costo cargado</div></div></div>`;
-  const groups={};data.forEach(it=>{(groups[it.dia]=groups[it.dia]||[]).push(it);});
-  const order=Object.keys(groups).sort((a,b)=>(a==='0'?-1:b==='0'?1:(+a)-(+b)));
-  let html='';
-  order.forEach(dia=>{const g=groups[dia];
-    const title=dia==='0'?'Trámites y generales':('Día '+dia+(g[0].fecha?' · '+esc(g[0].fecha):''));
-    html+=`<div class="seggroup"><h4>${title}</h4>`;
-    g.forEach(it=>{const cl=estadoClass(it.estado);
-      const meta=[it.horario?('🕑 '+esc(it.horario)):'',it.conf?('#'+esc(it.conf)):'',esc(it.notas)].filter(Boolean).join(' · ');
-      html+=`<div class="segitem"><span class="st ${cl}">${esc(it.estado)||'—'}</span>`+
-        `<div class="si"><div class="sname">${esc(it.item)}</div>${meta?`<div class="smeta">${meta}</div>`:''}</div>`+
-        `<span class="scost">${it.costo?('US$ '+esc(it.costo.replace(/[^0-9.,]/g,''))):''}</span></div>`;});
-    html+='</div>';});
-  document.getElementById('segbody').innerHTML=html;
-  document.querySelectorAll('.rsv').forEach(s=>{s.textContent='';s.classList.remove('done');});
-  Object.keys(groups).forEach(dia=>{if(dia==='0')return;
-    const el=document.getElementById('rsv-'+dia);if(!el)return;
-    const g=groups[dia],d=g.filter(it=>estadoClass(it.estado)==='ok').length;
-    el.textContent=`reservas ${d}/${g.length}`;
-    if(d===g.length&&g.length>0)el.classList.add('done');});
-}
+function setStatus(m){const s=document.getElementById('segstatus');if(s)s.textContent=m;}
+function api(body){
+  if(!API)return Promise.reject('no-api');
+  if(body)return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)}).then(r=>r.json());
+  return fetch(API+(API.indexOf('?')>=0?'&':'?')+'action=list',{cache:'no-store'}).then(r=>r.json());}
 function loadTracker(){
-  if(segStatus)segStatus.textContent='Cargando…';
-  fetch(SHEET_CSV,{cache:'no-store'}).then(r=>{if(!r.ok)throw 0;return r.text();})
-    .then(t=>{renderTracker(parseCSV(t));if(segStatus)segStatus.textContent='Actualizado '+new Date().toLocaleString('es-AR');})
-    .catch(()=>{if(segStatus)segStatus.textContent='No se pudo leer la planilla ahora. Abrila con el botón; reintentá con Actualizar.';});
-}
+  if(!API){renderAll();return;}
+  setStatus('Cargando…');
+  api().then(d=>{TRACK=(d&&d.rows)||[];setStatus('Actualizado '+new Date().toLocaleString('es-AR'));renderAll();})
+       .catch(()=>{setStatus('No se pudo leer la planilla. Revisá la URL del script (deploy como "Cualquiera") y tocá Actualizar.');renderAll();});}
+function writeThenReload(body,msg){
+  if(!API)return;
+  setStatus(msg);
+  api(body).then(()=>{}).catch(()=>{}).then(()=>loadTracker());}
+function pushUpdate(row,patch){writeThenReload(Object.assign({action:'update',row:row},patch),'Guardando…');}
+function pushAdd(obj){writeThenReload(Object.assign({action:'add'},obj),'Agregando…');}
+function pushDelete(row){if(window.confirm('¿Borrar esta actividad de la planilla?'))writeThenReload({action:'delete',row:row},'Borrando…');}
+function optsEstado(sel){return ESTADOS.map(e=>`<option ${e===sel?'selected':''}>${esc(e)}</option>`).join('');}
+function rowEditor(it){const cl=estadoClass(it.estado);
+  return `<div class="rez" data-row="${it.row}">
+    <div class="rez-top"><select class="rez-estado st ${cl}">${optsEstado(it.estado)}</select>
+      <span class="rez-item">${esc(it.item)}</span>
+      <button class="rez-del" title="Borrar actividad">✕</button></div>
+    <div class="rez-fields">
+      <input class="rez-costo" placeholder="Costo US$" value="${esc(it.costo)}">
+      <input class="rez-horario" placeholder="Horario" value="${esc(it.horario)}">
+      <input class="rez-conf" placeholder="Confirmación / código" value="${esc(it.conf)}">
+      <input class="rez-notas" placeholder="Notas" value="${esc(it.notas)}">
+      <button class="rez-save">Guardar</button></div></div>`;}
+function addForm(){return `<div class="addwrap"><button class="add-toggle">+ Agregar actividad</button>
+    <div class="add-form" hidden>
+      <input class="add-item" placeholder="Actividad / ítem">
+      <input class="add-costo" placeholder="Costo US$">
+      <input class="add-horario" placeholder="Horario">
+      <input class="add-notas" placeholder="Notas">
+      <button class="add-save">Agregar a la planilla</button></div></div>`;}
+function setupHTML(){return `<div class="setup"><h4>Conectá la planilla para editar desde acá</h4>
+    <ol><li>En tu planilla: <b>Extensiones → Apps Script</b>.</li>
+    <li>Pegá el código de <b>Code.gs</b> que te pasé y guardá.</li>
+    <li><b>Implementar → Nueva implementación → App web</b>. Ejecutar como <b>vos</b>, acceso <b>Cualquiera</b>.</li>
+    <li>Copiá la <b>URL /exec</b> y pegala acá:</li></ol>
+    <div class="setup-in"><input id="apiurl" placeholder="https://script.google.com/macros/s/.../exec">
+    <button id="segsave-api">Conectar</button></div>
+    <p class="rez-note">Se guarda en este navegador. Para que Meli y otros dispositivos no tengan que pegarla, ponela en la constante <code>API_HARDCODED</code> del HTML y subí el archivo al repo.</p></div>`;}
+function saveApi(){const i=document.getElementById('apiurl');if(!i)return;const v=i.value.trim();if(!v)return;
+  API=v;try{localStorage.setItem('viaje_api',v);}catch(e){}loadTracker();}
+function renderAll(){
+  days.forEach(d=>{const wrap=document.getElementById('resv-'+d.n);if(!wrap)return;
+    wrap.dataset.dia=d.n;wrap.dataset.fecha=d.date;
+    const items=TRACK.filter(it=>String(it.dia)===String(d.n));
+    let h='<div class="rez-h">Reservas y actividades</div>';
+    if(!API){h+='<div class="rez-note">Activá el seguimiento en la pestaña 📋 Seguimiento para editar desde acá.</div>';}
+    else{items.forEach(it=>h+=rowEditor(it));h+=addForm();}
+    wrap.innerHTML=h;});
+  document.querySelectorAll('.rsv').forEach(s=>{s.textContent='';s.classList.remove('done');});
+  const byDay={};TRACK.forEach(it=>{(byDay[it.dia]=byDay[it.dia]||[]).push(it);});
+  Object.keys(byDay).forEach(dia=>{if(String(dia)==='0')return;
+    const el=document.getElementById('rsv-'+dia);if(!el)return;
+    const g=byDay[dia],done=g.filter(it=>estadoClass(it.estado)==='ok').length;
+    el.textContent=`reservas ${done}/${g.length}`;if(done===g.length&&g.length>0)el.classList.add('done');});
+  renderSeguimiento();}
+function renderSeguimiento(){
+  const host=document.getElementById('segbody'),sum=document.getElementById('segsummary');if(!host)return;
+  if(!API){host.innerHTML=setupHTML();if(sum)sum.innerHTML='';return;}
+  let done=0,gasto=0;
+  TRACK.forEach(it=>{if(estadoClass(it.estado)==='ok')done++;const n=parseFloat((it.costo||'').replace(/[^0-9.]/g,''));if(!isNaN(n))gasto+=n;});
+  if(sum)sum.innerHTML=`<div class="segsummary"><div><div class="sv">${done}/${TRACK.length}</div><div class="sl">Confirmado o pagado</div></div>`+
+    `<div><div class="sv">US$ ${gasto.toLocaleString('es-AR')}</div><div class="sl">Costo cargado</div></div></div>`;
+  const grales=TRACK.filter(it=>String(it.dia)==='0');
+  let h='<div class="seggroup"><h4>Trámites y generales</h4><div class="resvwrap" data-dia="0" data-fecha="">';
+  grales.forEach(it=>h+=rowEditor(it));h+=addForm();h+='</div></div>';
+  host.innerHTML=h;}
+document.addEventListener('click',e=>{const t=e.target;
+  if(t.classList.contains('rez-save')){saveRez(t.closest('.rez'));}
+  else if(t.classList.contains('rez-del')){pushDelete(+t.closest('.rez').dataset.row);}
+  else if(t.classList.contains('add-toggle')){const f=t.parentElement.querySelector('.add-form');if(f)f.hidden=!f.hidden;}
+  else if(t.classList.contains('add-save')){addFromForm(t.closest('.resvwrap'),t.closest('.add-form'));}
+  else if(t.id==='segrefresh'){loadTracker();}
+  else if(t.id==='segsave-api'){saveApi();}});
+document.addEventListener('change',e=>{if(e.target.classList.contains('rez-estado'))saveRez(e.target.closest('.rez'));});
+function saveRez(rez){if(!rez)return;
+  pushUpdate(+rez.dataset.row,{estado:rez.querySelector('.rez-estado').value,
+    costo:rez.querySelector('.rez-costo').value,horario:rez.querySelector('.rez-horario').value,
+    conf:rez.querySelector('.rez-conf').value,notas:rez.querySelector('.rez-notas').value,
+    item:rez.querySelector('.rez-item').textContent});}
+function addFromForm(wrap,form){if(!wrap||!form)return;
+  const ii=form.querySelector('.add-item'),item=ii.value.trim();if(!item){ii.focus();return;}
+  pushAdd({dia:wrap.dataset.dia,fecha:wrap.dataset.fecha,item:item,
+    costo:form.querySelector('.add-costo').value,horario:form.querySelector('.add-horario').value,
+    notas:form.querySelector('.add-notas').value,estado:'A reservar'});}
 const segOpen=document.getElementById('segopen');if(segOpen)segOpen.href=SHEET_VIEW;
-const segRef=document.getElementById('segrefresh');if(segRef)segRef.onclick=loadTracker;
 loadTracker();
 
 // ---- Mapa (al final y protegido: si falla, el resto ya funciona) ----
