@@ -805,6 +805,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .segitem .si .smeta{font-size:12px;color:var(--muted);margin-top:2px}
   .segitem .scost{font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap}
   .resvwrap{border-top:1px solid var(--line);margin:0 18px;padding:12px 0 16px}
+  .resvwrap:empty{display:none}
+  .resvwrap.seg-edit{border-top:none;margin:0;padding:0}
+  .rview{display:grid;grid-template-columns:auto 1fr auto;gap:2px 12px;align-items:start;padding:8px 2px;border-bottom:1px solid var(--line)}
+  .rview:last-child{border-bottom:none}
+  .rview .rv-item{font-size:14px;color:var(--ink);font-weight:600}
+  .rview .rv-meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .rview .rv-cost{font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap}
+  .seg-sub{font-size:12.5px;color:var(--muted);margin:-2px 0 9px}
   .rez-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px}
   .rez-note{font-size:12px;color:var(--faint);margin:4px 0}
   .rez{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:7px 0}
@@ -876,7 +884,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="panel active" id="itinerario">
-    <p class="panel-lead">Cada día: el plan, el presupuesto de tiempo aproximado y <b>mi lectura</b> del ritmo — dónde no corremos nada y dónde conviene estar prevenido.</p>
+    <p class="panel-lead">Cada día: el plan, el presupuesto de tiempo aproximado y <b>mi lectura</b> del ritmo. Las reservas y actividades que cargues en 📋 Seguimiento aparecen acá con su estado (solo lectura).</p>
     <div id="days"></div>
     <div class="note">
       <b>⭐ El ajuste que más cambia el ritmo — "Versión A" de Java.</b> Si el operador del klotok garantiza <b>atracar en Kumai a las 08:30 del viernes 11</b> (con traslado al aeropuerto), se vuela esa mañana y se gana un día sin estirar vacaciones: entra <b>Tumpak Sewu</b> y queda <b>una noche completa de sueño entre Bromo y el Ijen</b>. Pedirlo <b>por escrito</b> antes de la seña.
@@ -896,7 +904,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <div class="panel" id="seguimiento">
-    <p class="panel-lead">Se carga en vivo desde tu <b>Google Sheet</b>. Editala desde el celu o la web (estado, costo final, horarios, códigos) y la página lo refleja al recargar o con 🔄 Actualizar. Estados que cuentan como listos: <b>Confirmado</b> o <b>Pagado</b>.</p>
+    <p class="panel-lead">Acá <b>cargás y editás todo</b>, por día: estado, costo, horario, código y notas, y <b>+ Agregar actividad</b>. Se guarda en tu <b>Google Sheet</b> al instante (Meli lo ve) y aparece en el Itinerario. Estados que cuentan como listos: <b>Confirmado</b> o <b>Pagado</b>.</p>
     <div class="segbar">
       <a class="segbtn primary" id="segopen" href="#" target="_blank" rel="noopener">📋 Abrir / editar planilla</a>
       <button class="segbtn" id="segrefresh">🔄 Actualizar</button>
@@ -1172,13 +1180,18 @@ function setupHTML(){return `<div class="setup"><h4>Conectá la planilla para ed
     <p class="rez-note">Se guarda en este navegador. Para que Meli y otros dispositivos no tengan que pegarla, ponela en la constante <code>API_HARDCODED</code> del HTML y subí el archivo al repo.</p></div>`;}
 function saveApi(){const i=document.getElementById('apiurl');if(!i)return;const v=i.value.trim();if(!v)return;
   API=v;try{localStorage.setItem('viaje_api',v);}catch(e){}loadTracker();}
+function rowView(it){const cl=estadoClass(it.estado);
+  const meta=[it.horario?('🕑 '+esc(it.horario)):'',it.conf?('#'+esc(it.conf)):'',esc(it.notas)].filter(Boolean).join(' · ');
+  return `<div class="rview"><span class="st ${cl}">${esc(it.estado)||'—'}</span>`+
+    `<div class="rv-main"><div class="rv-item">${esc(it.item)}</div>${meta?`<div class="rv-meta">${meta}</div>`:''}</div>`+
+    `<span class="rv-cost">${it.costo?('US$ '+esc(it.costo.replace(/[^0-9.,]/g,''))):''}</span></div>`;}
 function renderAll(){
+  // Itinerario: solo lectura (limpio). Muestra las reservas/actividades del día con su estado, si hay.
   days.forEach(d=>{const wrap=document.getElementById('resv-'+d.n);if(!wrap)return;
-    wrap.dataset.dia=d.n;wrap.dataset.fecha=d.date;
     const items=TRACK.filter(it=>String(it.dia)===String(d.n));
+    if(!API||!items.length){wrap.innerHTML='';return;}
     let h='<div class="rez-h">Reservas y actividades</div>';
-    if(!API){h+='<div class="rez-note">Activá el seguimiento en la pestaña 📋 Seguimiento para editar desde acá.</div>';}
-    else{items.forEach(it=>h+=rowEditor(it));h+=addForm();}
+    items.forEach(it=>h+=rowView(it));
     wrap.innerHTML=h;});
   document.querySelectorAll('.rsv').forEach(s=>{s.textContent='';s.classList.remove('done');});
   const byDay={};TRACK.forEach(it=>{(byDay[it.dia]=byDay[it.dia]||[]).push(it);});
@@ -1187,6 +1200,15 @@ function renderAll(){
     const g=byDay[dia],done=g.filter(it=>estadoClass(it.estado)==='ok').length;
     el.textContent=`reservas ${done}/${g.length}`;if(done===g.length&&g.length>0)el.classList.add('done');});
   renderSeguimiento();}
+function segGroup(dia,heading,fecha,subtitle){
+  const items=TRACK.filter(it=>String(it.dia)===String(dia));
+  let h=`<div class="seggroup"><h4>${esc(heading)}</h4>`;
+  if(subtitle)h+=`<div class="seg-sub">${esc(subtitle)}</div>`;
+  h+=`<div class="resvwrap seg-edit" data-dia="${esc(dia)}" data-fecha="${esc(fecha)}">`;
+  items.forEach(it=>h+=rowEditor(it));
+  h+=addForm();
+  h+='</div></div>';
+  return h;}
 function renderSeguimiento(){
   const host=document.getElementById('segbody'),sum=document.getElementById('segsummary');if(!host)return;
   if(!API){host.innerHTML=setupHTML();if(sum)sum.innerHTML='';return;}
@@ -1194,9 +1216,8 @@ function renderSeguimiento(){
   TRACK.forEach(it=>{if(estadoClass(it.estado)==='ok')done++;const n=parseFloat((it.costo||'').replace(/[^0-9.]/g,''));if(!isNaN(n))gasto+=n;});
   if(sum)sum.innerHTML=`<div class="segsummary"><div><div class="sv">${done}/${TRACK.length}</div><div class="sl">Confirmado o pagado</div></div>`+
     `<div><div class="sv">US$ ${gasto.toLocaleString('es-AR')}</div><div class="sl">Costo cargado</div></div></div>`;
-  const grales=TRACK.filter(it=>String(it.dia)==='0');
-  let h='<div class="seggroup"><h4>Trámites y generales</h4><div class="resvwrap" data-dia="0" data-fecha="">';
-  grales.forEach(it=>h+=rowEditor(it));h+=addForm();h+='</div></div>';
+  let h=segGroup('0','Trámites y generales','','Visas, seguro, aéreo, tasas…');
+  days.forEach(d=>{h+=segGroup(String(d.n),'Día '+d.n+' · '+d.date,d.date,d.title.replace(/<[^>]+>/g,''));});
   host.innerHTML=h;}
 document.addEventListener('click',e=>{const t=e.target;
   if(t.classList.contains('rez-save')){saveRez(t.closest('.rez'));}
